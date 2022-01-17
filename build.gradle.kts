@@ -69,7 +69,6 @@ dependencies {
 
     api(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version = kotlinVersion)
     api(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin-api", version = kotlinVersion)
-    api("org.gradle.kotlin:gradle-kotlin-dsl-plugins:2.2.0")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
 }
@@ -135,24 +134,18 @@ fun MavenPublication.setPom() {
     pom {
         name.set("Deploy Helpers")
         description.set("Deployment stuff goes here because we're getting tired of these scripts")
-        url.set("https://github.com/lightningkite/khrysalis")
+        url.set("https://github.com/lightningkite/gradle-deploy-helpers")
 
         scm {
-            connection.set("scm:git:https://github.com/lightningkite/khrysalis.git")
-            developerConnection.set("scm:git:https://github.com/lightningkite/khrysalis.git")
-            url.set("https://github.com/lightningkite/khrysalis")
+            connection.set("scm:git:https://github.com/lightningkite/gradle-deploy-helpers.git")
+            developerConnection.set("scm:git:https://github.com/lightningkite/gradle-deploy-helpers.git")
+            url.set("https://github.com/lightningkite/gradle-deploy-helpers")
         }
 
         licenses {
-
             license {
-                name.set("GNU General Public License v3.0")
-                url.set("https://www.gnu.org/licenses/gpl-3.0.en.html")
-                distribution.set("repo")
-            }
-            license {
-                name.set("Commercial License")
-                url.set("https://www.lightningkite.com")
+                name.set("The MIT License (MIT)")
+                url.set("https://www.mit.edu/~amini/LICENSE.md")
                 distribution.set("repo")
             }
         }

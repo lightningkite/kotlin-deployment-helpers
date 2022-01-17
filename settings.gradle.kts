@@ -1,2 +1,1 @@
-rootProject.name = "lightningkite-deploy-helpers"
-
+rootProject.name = "deploy-helpers"

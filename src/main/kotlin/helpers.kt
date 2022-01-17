@@ -5,14 +5,16 @@ import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.*
+import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.jvm.tasks.Jar
 import java.util.*
-import org.gradle.kotlin.dsl.*
 import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+private class MarkerClass
 
 fun MavenPom.github(group: String, repo: String) {
     url.set("https://github.com/$group/$repo")
@@ -77,10 +79,14 @@ internal fun File.runCli(vararg args: String): String {
     return process.inputStream.readAllBytes().toString(Charsets.UTF_8)
 }
 
+internal fun File.getGitBranch(): String = runCli("git", "rev-parse", "--abbrev-ref", "HEAD").trim()
 internal fun File.getGitHash(): String = runCli("git", "rev-parse", "--short", "HEAD").trim()
 internal fun File.getGitTag(): String? = runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
 
 fun Project.standardPublishing(pom: MavenPom.()->Unit) {
+    this.version = project.rootDir.run {
+        getGitTag() ?: (getGitBranch() + "-SNAPSHOT")
+    }
     val props = project.rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { stream ->
         Properties().apply { load(stream) }
     }
@@ -128,16 +134,12 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
         if (useDeployment) {
             repositories.apply {
                 maven {
-                    it.name = "snapshot"
-                    it.url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-                    it.credentials {
-                        it.username = deploymentUser
-                        it.password = deploymentPassword
+                    it.name = "sonatype"
+                    if(version.toString().endsWith("-SNAPSHOT")) {
+                        it.url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                    } else {
+                        it.url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
                     }
-                }
-                maven {
-                    it.name = "staging"
-                    it.url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
                     it.credentials {
                         it.username = deploymentUser
                         it.password = deploymentPassword
@@ -150,6 +152,33 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
         signing {
             it.useInMemoryPgpKeys(signingKey, signingPassword)
             it.sign(publishing.publications)
+        }
+    }
+    tasks.create("setupGitHubActions").apply {
+        group = "help"
+        doLast {
+            setupGitHubAction("both/testPR.yml")
+            setupGitHubAction("library/release.yml")
+            setupGitHubAction("library/snapshot.yml")
+        }
+    }
+}
+
+private val loader = MarkerClass::class.java.classLoader
+private fun Project.setupGitHubAction(path: String) {
+    loader.getResource("githubActions/$path")!!.openStream().copyTo(rootDir.resolve(".github/workflows/${path.substringAfterLast('/')}").apply { parentFile.mkdirs() }.outputStream())
+}
+
+fun Project.standardApplication() {
+    (tasks.getByName("distZip") as? Zip)?.apply{
+        archiveFileName.set("distribution.zip")
+    }
+    tasks.create("setupGitHubActions").apply {
+        group = "help"
+        doLast {
+            setupGitHubAction("both/testPR.yml")
+            setupGitHubAction("app/release.yml")
+            setupGitHubAction("app/testMaster.yml")
         }
     }
 }
