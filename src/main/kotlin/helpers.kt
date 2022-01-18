@@ -118,7 +118,7 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
         ?.trim()
     val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    sources(generateJavadoc = useDeployment)
+    sources(generateJavadoc = props?.getProperty("generateJavadoc")?.toBoolean() ?: true)
 
     publishing {
         it.publications {
