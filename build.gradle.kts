@@ -3,7 +3,6 @@ import java.util.Properties
 plugins {
     kotlin("jvm") version "1.6.10"
     java
-    `java-gradle-plugin`
     signing
     id("org.jetbrains.dokka") version "1.6.0"
     `maven-publish`
