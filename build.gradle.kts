@@ -70,7 +70,7 @@ var Task.published: Boolean
         this.project.artifacts.add("archives", this)
     }
 
-fun Project.sources(generateJavadoc: Boolean) {
+fun Project.sources(publishJavadoc: Boolean) {
     tasks.apply {
         this.create("sourceJar", org.gradle.jvm.tasks.Jar::class.java) {
             archiveClassifier.set("sources")
@@ -84,7 +84,7 @@ fun Project.sources(generateJavadoc: Boolean) {
             dependsOn("dokkaJavadoc")
             archiveClassifier.set("javadoc")
             from(project.file("build/dokka/javadoc"))
-            published = generateJavadoc
+            published = publishJavadoc
         }
     }
 }
@@ -137,7 +137,7 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
         ?.trim()
     val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    sources(generateJavadoc = props?.getProperty("generateJavadoc")?.toBoolean() ?: true)
+    sources(publishJavadoc = props?.getProperty("publishJavadoc")?.toBoolean() ?: true)
 
     publishing {
         publications {
