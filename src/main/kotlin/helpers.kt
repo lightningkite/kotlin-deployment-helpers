@@ -1,18 +1,15 @@
 package com.lightningkite.deployhelpers
 
-import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.Task
-import org.gradle.api.publish.PublishingExtension
-import org.gradle.api.publish.maven.*
-import org.gradle.api.tasks.Copy
+import org.gradle.api.publish.maven.MavenPom
+import org.gradle.api.publish.maven.MavenPomDeveloperSpec
+import org.gradle.api.publish.maven.MavenPomLicenseSpec
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.jvm.tasks.Jar
-import java.util.*
-import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.TimeUnit
+import java.util.*
 
 private class MarkerClass
 
@@ -52,7 +49,7 @@ var Task.published: Boolean
         this.project.artifacts.add("archives", this)
     }
 
-fun Project.sourceAndJavadoc() {
+fun Project.sources(publishJavadoc: Boolean) {
     tasks.apply {
         this.create("sourceJar", Jar::class.java) {
             it.archiveClassifier.set("sources")
@@ -66,10 +63,11 @@ fun Project.sourceAndJavadoc() {
             it.dependsOn("dokkaJavadoc")
             it.archiveClassifier.set("javadoc")
             it.from(project.file("build/dokka/javadoc"))
-            it.published = true
+            it.published = publishJavadoc
         }
     }
 }
+
 
 internal fun File.runCli(vararg args: String): String {
     val process = ProcessBuilder(*args)
@@ -118,9 +116,9 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
     val deploymentPassword = (System.getenv("OSSRH_PASSWORD")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("ossrhPassword")?.toString())
         ?.trim()
-    val useDeployment = deploymentUser != null || deploymentPassword != null
+    val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    sourceAndJavadoc()
+    sources(publishJavadoc = props?.getProperty("publishJavadoc")?.toBoolean() ?: true)
 
     publishing {
         it.publications {
