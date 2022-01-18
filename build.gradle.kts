@@ -1,4 +1,4 @@
-import java.util.Properties
+import java.util.*
 
 plugins {
     kotlin("jvm") version "1.6.10"
@@ -14,7 +14,7 @@ group = "com.lightningkite"
 repositories {
     mavenCentral()
     google()
-    maven(url="https://plugins.gradle.org/m2/")
+    maven(url = "https://plugins.gradle.org/m2/")
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class).all {
@@ -70,7 +70,7 @@ var Task.published: Boolean
         this.project.artifacts.add("archives", this)
     }
 
-fun Project.sourceAndJavadoc() {
+fun Project.sources(generateJavadoc: Boolean) {
     tasks.apply {
         this.create("sourceJar", org.gradle.jvm.tasks.Jar::class.java) {
             archiveClassifier.set("sources")
@@ -84,24 +84,10 @@ fun Project.sourceAndJavadoc() {
             dependsOn("dokkaJavadoc")
             archiveClassifier.set("javadoc")
             from(project.file("build/dokka/javadoc"))
-            published = true
+            published = generateJavadoc
         }
     }
 }
-
-fun Project.sources() {
-    tasks.apply {
-        this.create("sourceJar", org.gradle.jvm.tasks.Jar::class.java) {
-            archiveClassifier.set("sources")
-            sourceSets.asMap.values.forEach { s ->
-                from(s.allSource.srcDirs)
-            }
-            from(project.projectDir.resolve("src/include"))
-            published = true
-        }
-    }
-}
-
 
 fun File.runCli(vararg args: String): String {
     val process = ProcessBuilder(*args)
@@ -115,7 +101,7 @@ fun File.getGitBranch(): String = runCli("git", "rev-parse", "--abbrev-ref", "HE
 fun File.getGitHash(): String = runCli("git", "rev-parse", "--short", "HEAD").trim()
 fun File.getGitTag(): String? = runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
 
-fun Project.standardPublishing(pom: MavenPom.()->Unit) {
+fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
     this.version = project.rootDir.run {
         getGitTag() ?: (getGitBranch() + "-SNAPSHOT")
     }
@@ -126,7 +112,9 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
     val signingKey: String? = (System.getenv("SIGNING_KEY")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingKey")?.toString())
         ?.lineSequence()
-        ?.filter { it.trim().firstOrNull()?.let { it.isLetterOrDigit() || it == '=' || it == '/' || it == '+' } == true }
+        ?.filter {
+            it.trim().firstOrNull()?.let { it.isLetterOrDigit() || it == '=' || it == '/' || it == '+' } == true
+        }
         ?.joinToString("\n")
     val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingPassword")?.toString()
@@ -147,21 +135,17 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
     val deploymentPassword = (System.getenv("OSSRH_PASSWORD")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("ossrhPassword")?.toString())
         ?.trim()
-    val useDeployment = deploymentUser != null || deploymentPassword != null
+    val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    if(useDeployment) {
-        sourceAndJavadoc()
-    } else {
-        sources()
-    }
+    sources(generateJavadoc = useDeployment)
 
     publishing {
         publications {
             create("main", MavenPublication::class.java) {
                 val component = components.findByName("release") ?: components.findByName("kotlin")
                 from(component)
-                for(task in tasks.asMap.values) {
-                    if(task.published)
+                for (task in tasks.asMap.values) {
+                    if (task.published)
                         artifact(task)
                 }
                 pom { pom(this) }
@@ -171,7 +155,7 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
             repositories.apply {
                 maven {
                     name = "sonatype"
-                    if(version.toString().endsWith("-SNAPSHOT")) {
+                    if (version.toString().endsWith("-SNAPSHOT")) {
                         url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
                     } else {
                         url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
