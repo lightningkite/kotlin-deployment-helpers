@@ -46,7 +46,7 @@ fun MavenPomDeveloperSpec.developer(
 }
 
 var Task.published: Boolean
-    get() = (this.extensions.extraProperties.get("published") as? Boolean) ?: false
+    get() = this.extensions.extraProperties.has("published") && this.extensions.extraProperties.get("published") as Boolean
     set(value) {
         this.extensions.extraProperties.set("published", value)
         this.project.artifacts.add("archives", this)
