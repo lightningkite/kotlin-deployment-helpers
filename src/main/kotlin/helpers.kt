@@ -81,9 +81,10 @@ internal fun File.runCli(vararg args: String): String {
 
 internal fun File.getGitBranch(): String = runCli("git", "rev-parse", "--abbrev-ref", "HEAD").trim()
 internal fun File.getGitHash(): String = runCli("git", "rev-parse", "--short", "HEAD").trim()
-internal fun File.getGitTag(): String? = runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
+internal fun File.getGitTag(): String? =
+    runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
 
-fun Project.standardPublishing(pom: MavenPom.()->Unit) {
+fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
     this.version = project.rootDir.run {
         getGitTag() ?: (getGitBranch() + "-SNAPSHOT")
     }
@@ -94,7 +95,9 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
     val signingKey: String? = (System.getenv("SIGNING_KEY")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingKey")?.toString())
         ?.lineSequence()
-        ?.filter { it.trim().firstOrNull()?.let { it.isLetterOrDigit() || it == '=' || it == '/' || it == '+' } == true }
+        ?.filter {
+            it.trim().firstOrNull()?.let { it.isLetterOrDigit() || it == '=' || it == '/' || it == '+' } == true
+        }
         ?.joinToString("\n")
     val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingPassword")?.toString()
@@ -121,21 +124,33 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
 
     publishing {
         it.publications {
-            it.create("main", MavenPublication::class.java) {
-                val component = components.findByName("release") ?: components.findByName("kotlin")
-                it.from(component)
-                for(task in tasks.asMap.values) {
-                    if(task.published)
-                        it.artifact(task)
+            afterEvaluate { _ ->
+                if (it.size > 0) {
+                    it.asMap.values.filterIsInstance<MavenPublication>().forEach { it ->
+                        for (task in tasks.asMap.values) {
+                            if (task.published)
+                                it.artifact(task)
+                        }
+                        it.pom { pom(it) }
+                    }
+                } else {
+                    it.create("main", MavenPublication::class.java) {
+                        val component = components.findByName("release") ?: components.findByName("kotlin")
+                        it.from(component)
+                        for (task in tasks.asMap.values) {
+                            if (task.published)
+                                it.artifact(task)
+                        }
+                        it.pom { pom(it) }
+                    }
                 }
-                it.pom { pom(it) }
             }
         }
         if (useDeployment) {
-            repositories.apply {
+            it.repositories.apply {
                 maven {
                     it.name = "sonatype"
-                    if(version.toString().endsWith("-SNAPSHOT")) {
+                    if (version.toString().endsWith("-SNAPSHOT")) {
                         it.url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
                     } else {
                         it.url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
@@ -166,11 +181,13 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
 
 private val loader = MarkerClass::class.java.classLoader
 private fun Project.setupGitHubAction(path: String) {
-    loader.getResource("githubActions/$path")!!.openStream().copyTo(rootDir.resolve(".github/workflows/${path.substringAfterLast('/')}").apply { parentFile.mkdirs() }.outputStream())
+    loader.getResource("githubActions/$path")!!.openStream()
+        .copyTo(rootDir.resolve(".github/workflows/${path.substringAfterLast('/')}").apply { parentFile.mkdirs() }
+            .outputStream())
 }
 
 fun Project.standardApplication() {
-    (tasks.getByName("distZip") as? Zip)?.apply{
+    (tasks.getByName("distZip") as? Zip)?.apply {
         archiveFileName.set("distribution.zip")
     }
     tasks.create("setupGitHubActions").apply {
