@@ -12,15 +12,6 @@ val kotlinVersion = "1.6.10"
 
 group = "com.lightningkite"
 
-gradlePlugin {
-    plugins {
-        val khrysalisPlugin by creating() {
-            id = "com.lightningkite.khrysalis"
-            implementationClass = "com.lightningkite.khrysalis.gradle.KhrysalisPlugin"
-        }
-    }
-}
-
 repositories {
     mavenCentral()
     google()
