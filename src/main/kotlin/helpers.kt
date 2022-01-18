@@ -71,6 +71,19 @@ fun Project.sourceAndJavadoc() {
     }
 }
 
+fun Project.sources() {
+    tasks.apply {
+        this.create("sourceJar", Jar::class.java) {
+            it.archiveClassifier.set("sources")
+            sourceSets.asMap.values.forEach { s ->
+                it.from(s.allSource.srcDirs)
+            }
+            it.from(project.projectDir.resolve("src/include"))
+            it.published = true
+        }
+    }
+}
+
 internal fun File.runCli(vararg args: String): String {
     val process = ProcessBuilder(*args)
         .directory(this)
@@ -120,7 +133,11 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
         ?.trim()
     val useDeployment = deploymentUser != null || deploymentPassword != null
 
-    sourceAndJavadoc()
+    if(useDeployment) {
+        sourceAndJavadoc()
+    } else {
+        sources()
+    }
 
     publishing {
         it.publications {

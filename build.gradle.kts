@@ -89,6 +89,20 @@ fun Project.sourceAndJavadoc() {
     }
 }
 
+fun Project.sources() {
+    tasks.apply {
+        this.create("sourceJar", org.gradle.jvm.tasks.Jar::class.java) {
+            archiveClassifier.set("sources")
+            sourceSets.asMap.values.forEach { s ->
+                from(s.allSource.srcDirs)
+            }
+            from(project.projectDir.resolve("src/include"))
+            published = true
+        }
+    }
+}
+
+
 fun File.runCli(vararg args: String): String {
     val process = ProcessBuilder(*args)
         .directory(this)
@@ -135,7 +149,11 @@ fun Project.standardPublishing(pom: MavenPom.()->Unit) {
         ?.trim()
     val useDeployment = deploymentUser != null || deploymentPassword != null
 
-    sourceAndJavadoc()
+    if(useDeployment) {
+        sourceAndJavadoc()
+    } else {
+        sources()
+    }
 
     publishing {
         publications {
