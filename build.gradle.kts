@@ -30,6 +30,8 @@ dependencies {
     api(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version = kotlinVersion)
     api(group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin-api", version = kotlinVersion)
 
+    compileOnly("com.android.tools.build:gradle:7.0.4")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
 }
 

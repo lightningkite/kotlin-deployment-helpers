@@ -1,5 +1,8 @@
 package com.lightningkite.deployhelpers
 
+import com.android.build.gradle.LibraryExtension
+import groovy.lang.GroovyObject
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.publish.maven.MavenPom
@@ -49,6 +52,9 @@ var Task.published: Boolean
         this.project.artifacts.add("archives", this)
     }
 
+val Any?.groovyObject: GroovyObject? get() = this as? GroovyObject
+fun GroovyObject.getPropertyAsObject(key: String): GroovyObject? = getProperty(key) as? GroovyObject
+
 fun Project.sources(publishJavadoc: Boolean) {
     tasks.apply {
         this.create("sourceJar", Jar::class.java) {
@@ -56,6 +62,14 @@ fun Project.sources(publishJavadoc: Boolean) {
             sourceSets.asMap.values.forEach { s ->
                 it.from(s.allSource.srcDirs)
             }
+            extensions.findByName("android")
+                ?.let { it as? LibraryExtension }
+                ?.sourceSets
+                ?.forEach { set ->
+                    set.java.srcDirs.forEach { f ->
+                        it.from(f)
+                    }
+                }
             it.from(project.projectDir.resolve("src/include"))
             it.published = true
         }
