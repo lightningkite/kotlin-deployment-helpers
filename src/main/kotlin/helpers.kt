@@ -5,6 +5,7 @@ import groovy.lang.GroovyObject
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPom
 import org.gradle.api.publish.maven.MavenPomDeveloperSpec
 import org.gradle.api.publish.maven.MavenPomLicenseSpec
@@ -96,24 +97,32 @@ internal fun File.getGitHash(): String = runCli("git", "rev-parse", "--short", "
 internal fun File.getGitTag(): String? =
     runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
 
-fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
-    this.version = project.rootDir.run {
-        getGitTag() ?: (getGitBranch() + "-SNAPSHOT")
-    }
+
+data class Standards(
+    val props: Properties?,
+    val branch: String,
+    val version: String?,
+    val signingKey: String?,
+    val signingPassword: String?,
+    val publishJavadocs: Boolean,
+) {
+    val useSigning: Boolean get() = signingKey != null && signingPassword != null
+}
+
+
+fun Project.standards(): Standards {
     val props = project.rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { stream ->
         Properties().apply { load(stream) }
     }
-
-    val signingKey: String? = (System.getenv("SIGNING_KEY")?.takeUnless { it.isEmpty() }
+    val signingKey = (System.getenv("SIGNING_KEY")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingKey")?.toString())
         ?.lineSequence()
         ?.filter {
             it.trim().firstOrNull()?.let { it.isLetterOrDigit() || it == '=' || it == '/' || it == '+' } == true
         }
         ?.joinToString("\n")
-    val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.takeUnless { it.isEmpty() }
+    val signingPassword = System.getenv("SIGNING_PASSWORD")?.takeUnless { it.isEmpty() }
         ?: props?.getProperty("signingPassword")?.toString()
-    val useSigning = signingKey != null && signingPassword != null
 
     if (signingKey != null) {
         if (!signingKey.contains('\n')) {
@@ -123,41 +132,99 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
             throw IllegalArgumentException("Signing key has quote outta nowhere")
         }
     }
+    return Standards(
+        props = props,
+        branch = project.rootDir.run { getGitBranch() },
+        version = project.rootDir.run { getGitTag() },
+        signingKey = signingKey,
+        signingPassword = signingPassword,
+        publishJavadocs = props?.getProperty("publishJavadoc")?.toBoolean() ?: true
+    )
+}
 
-    val deploymentUser = (System.getenv("OSSRH_USERNAME")?.takeUnless { it.isEmpty() }
-        ?: props?.getProperty("ossrhUsername")?.toString())
+fun Project.standardPublications(it: PublishingExtension, pom: MavenPom.() -> Unit) {
+    it.publications {
+        afterEvaluate { _ ->
+            if (it.size > 0) {
+                it.asMap.values.filterIsInstance<MavenPublication>().forEach { it ->
+                    for (task in tasks.asMap.values) {
+                        if (task.published)
+                            it.artifact(task)
+                    }
+                    it.pom { pom(it) }
+                }
+            } else {
+                it.create("main", MavenPublication::class.java) {
+                    val component = components.findByName("release") ?: components.findByName("kotlin")
+                    it.from(component)
+                    for (task in tasks.asMap.values) {
+                        if (task.published)
+                            it.artifact(task)
+                    }
+                    it.pom { pom(it) }
+                }
+            }
+        }
+    }
+}
+
+
+fun Project.customPublishing(name: String, publishUrl: String, pom: MavenPom.() -> Unit) {
+
+    val standards = standards()
+    this.version = standards.version ?: "${standards.branch}-SNAPSHOT"
+
+    sources(publishJavadoc = standards.publishJavadocs)
+
+    val deploymentUser = (System.getenv("DEPLOY_NAME")?.takeUnless { it.isEmpty() }
+        ?: standards.props?.getProperty("deployName")?.toString())
         ?.trim()
-    val deploymentPassword = (System.getenv("OSSRH_PASSWORD")?.takeUnless { it.isEmpty() }
-        ?: props?.getProperty("ossrhPassword")?.toString())
+    val deploymentPassword = (System.getenv("DEPLOY_PASSWORD")?.takeUnless { it.isEmpty() }
+        ?: standards.props?.getProperty("deployPassword")?.toString())
         ?.trim()
     val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    sources(publishJavadoc = props?.getProperty("publishJavadoc")?.toBoolean() ?: true)
-
     publishing {
-        it.publications {
-            afterEvaluate { _ ->
-                if (it.size > 0) {
-                    it.asMap.values.filterIsInstance<MavenPublication>().forEach { it ->
-                        for (task in tasks.asMap.values) {
-                            if (task.published)
-                                it.artifact(task)
-                        }
-                        it.pom { pom(it) }
-                    }
-                } else {
-                    it.create("main", MavenPublication::class.java) {
-                        val component = components.findByName("release") ?: components.findByName("kotlin")
-                        it.from(component)
-                        for (task in tasks.asMap.values) {
-                            if (task.published)
-                                it.artifact(task)
-                        }
-                        it.pom { pom(it) }
+        standardPublications(it, pom)
+        if (useDeployment) {
+            it.repositories.apply {
+                maven {
+                    it.name = name
+                    it.url = uri(publishUrl)
+                    it.credentials {
+                        it.username = deploymentUser
+                        it.password = deploymentPassword
                     }
                 }
             }
         }
+    }
+    if (standards.useSigning) {
+        signing {
+            it.useInMemoryPgpKeys(standards.signingKey, standards.signingPassword)
+            it.sign(publishing.publications)
+        }
+    }
+}
+
+
+fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
+    val standards = this.standards()
+
+    this.version = standards.version ?: "${standards.branch}-SNAPSHOT"
+
+    val deploymentUser = (System.getenv("OSSRH_USERNAME")?.takeUnless { it.isEmpty() }
+        ?: standards.props?.getProperty("ossrhUsername")?.toString())
+        ?.trim()
+    val deploymentPassword = (System.getenv("OSSRH_PASSWORD")?.takeUnless { it.isEmpty() }
+        ?: standards.props?.getProperty("ossrhPassword")?.toString())
+        ?.trim()
+    val useDeployment = deploymentUser != null && deploymentPassword != null
+
+    sources(publishJavadoc = standards.publishJavadocs)
+
+    publishing {
+        standardPublications(it, pom)
         if (useDeployment) {
             it.repositories.apply {
                 maven {
@@ -175,9 +242,9 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
             }
         }
     }
-    if (useSigning) {
+    if (standards.useSigning) {
         signing {
-            it.useInMemoryPgpKeys(signingKey, signingPassword)
+            it.useInMemoryPgpKeys(standards.signingKey, standards.signingPassword)
             it.sign(publishing.publications)
         }
     }
