@@ -93,13 +93,18 @@ internal fun File.runCli(vararg args: String): String {
 
 internal fun File.getGitBranch(): String = runCli("git", "rev-parse", "--abbrev-ref", "HEAD").trim()
 internal fun File.getGitHash(): String = runCli("git", "rev-parse", "--short", "HEAD").trim()
+internal fun File.isGitClean(): Boolean = runCli("git", "status").contains("working tree clean", true)
 internal fun File.getGitTag(): String? =
     runCli("git", "tag", "--points-at", getGitHash()).trim().takeUnless { it.isBlank() }
 
 fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
-    this.version = project.rootDir.run {
-        getGitTag() ?: (getGitBranch() + "-SNAPSHOT")
+    val branch = project.rootDir.run { getGitBranch() }
+    val branchVersion = "$branch-SNAPSHOT"
+    this.version = System.getenv("GITHUB_REF").takeUnless { it.startsWith("refs/tags/") }?.let {
+        it.removePrefix("refs/tags/")
     }
+        ?: System.getenv("PUBLISH_VERSION").takeUnless { it.isEmpty() }
+        ?: branchVersion
     val props = project.rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { stream ->
         Properties().apply { load(stream) }
     }
@@ -138,12 +143,12 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
         it.publications {
             afterEvaluate { _ ->
                 if (it.size > 0) {
-                    it.asMap.values.filterIsInstance<MavenPublication>().forEach { it ->
+                    it.toList().filterIsInstance<MavenPublication>().forEach { p ->
                         for (task in tasks.asMap.values) {
                             if (task.published)
-                                it.artifact(task)
+                                p.artifact(task)
                         }
-                        it.pom { pom(it) }
+                        p.pom { pom(it) }
                     }
                 } else {
                     it.create("main", MavenPublication::class.java) {
