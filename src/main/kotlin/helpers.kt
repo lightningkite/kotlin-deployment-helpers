@@ -100,10 +100,10 @@ internal fun File.getGitTag(): String? =
 fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
     val branch = project.rootDir.run { getGitBranch() }
     val branchVersion = "$branch-SNAPSHOT"
-    this.version = System.getenv("GITHUB_REF").takeUnless { it.startsWith("refs/tags/") }?.let {
+    this.version = System.getenv("GITHUB_REF")?.takeIf { it.startsWith("refs/tags/") }?.let {
         it.removePrefix("refs/tags/")
     }
-        ?: System.getenv("PUBLISH_VERSION").takeUnless { it.isEmpty() }
+        ?: System.getenv("PUBLISH_VERSION")?.takeUnless { it.isEmpty() }
         ?: branchVersion
     val props = project.rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { stream ->
         Properties().apply { load(stream) }
