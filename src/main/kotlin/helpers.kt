@@ -145,8 +145,10 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
                 if (it.size > 0) {
                     it.toList().filterIsInstance<MavenPublication>().forEach { p ->
                         for (task in tasks.asMap.values) {
-                            if (task.published)
+                            if (task.published) {
+                                println("Adding task ${task.name} to ${p.name}")
                                 p.artifact(task)
+                            }
                         }
                         p.pom { pom(it) }
                     }
