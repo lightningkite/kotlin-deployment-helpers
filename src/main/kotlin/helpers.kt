@@ -137,7 +137,11 @@ fun Project.standardPublishing(pom: MavenPom.() -> Unit) {
         ?.trim()
     val useDeployment = deploymentUser != null && deploymentPassword != null
 
-    sources(publishJavadoc = props?.getProperty("publishJavadoc")?.toBoolean() ?: true)
+    if(plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")) {
+        // TODO: add docs, but not sources.  Sources are automatic
+    } else {
+        sources(publishJavadoc = props?.getProperty("publishJavadoc")?.toBoolean() ?: true)
+    }
 
     publishing {
         it.publications {
